@@ -44,7 +44,7 @@
 ```
 apps/web   — клиент
 apps/api   — backend
-infra/     — docker-compose (postgres, redis, minio, livekit)
+infra/     — docker-compose (postgres, redis, minio, livekit, egress)
 ```
 
 Прототип UX: `index.php` (не production).

@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { RoomsModule } from './rooms/rooms.module';
 import { HealthModule } from './health/health.module';
 import { LivekitModule } from './livekit/livekit.module';
+import { RecordingsModule } from './recordings/recordings.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { LivekitModule } from './livekit/livekit.module';
     AuthModule,
     RoomsModule,
     LivekitModule,
+    RecordingsModule,
     HealthModule,
   ],
 })

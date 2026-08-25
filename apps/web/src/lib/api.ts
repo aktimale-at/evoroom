@@ -94,5 +94,33 @@ export const api = {
       role: string;
       displayName: string;
     }>(`/api/rooms/${slug}/host`, { method: 'POST' }),
+  startRecording: (slug: string, meetingId: string) =>
+    request<{
+      id: string;
+      status: string;
+      egressId: string | null;
+      objectKey: string | null;
+      startedAt: string | null;
+    }>(`/api/rooms/${slug}/meetings/${meetingId}/recording/start`, { method: 'POST' }),
+  stopRecording: (slug: string, meetingId: string) =>
+    request<{
+      id: string;
+      status: string;
+      egressId: string | null;
+      objectKey: string | null;
+      durationSec: number | null;
+      startedAt: string | null;
+      endedAt: string | null;
+    }>(`/api/rooms/${slug}/meetings/${meetingId}/recording/stop`, { method: 'POST' }),
+  recordingStatus: (slug: string, meetingId: string) =>
+    request<{
+      status: string;
+      recording: {
+        id: string;
+        status: string;
+        objectKey: string | null;
+        durationSec: number | null;
+      } | null;
+    }>(`/api/rooms/${slug}/meetings/${meetingId}/recording`),
   health: () => request<{ ok: boolean; db: boolean }>('/api/health'),
 };

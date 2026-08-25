@@ -9,9 +9,9 @@
 
 - **web** — React + TypeScript + Vite + LiveKit Client  
 - **api** — NestJS + Prisma + PostgreSQL + JWT  
-- **infra** — Docker: Postgres, Redis, MinIO, LiveKit  
+- **infra** — Docker: Postgres, Redis, MinIO, LiveKit, **Egress**  
 
-Запись composite (Egress) — следующий вертикальный шаг вместе с видео.
+Запись: Room Composite (grid) → MinIO бакет `evoroom/recordings/…`.
 
 ## Быстрый старт
 
@@ -29,7 +29,7 @@ cp .env.example .env
 npm run infra:up
 ```
 
-Поднимет Postgres, Redis, MinIO, LiveKit.
+Поднимет Postgres, Redis, MinIO, LiveKit, Egress.
 
 Без Docker API/web соберутся, но БД и видеокомната не заработают.
 
@@ -68,11 +68,23 @@ infra/        — docker-compose, livekit.yaml
 prototype     — (старый UI в корне: index.php)
 ```
 
+## Запись
+
+Ведущий в комнате: **● Запись** / **■ Стоп**. API:
+
+- `POST /api/rooms/:slug/meetings/:meetingId/recording/start`
+- `POST /api/rooms/:slug/meetings/:meetingId/recording/stop`
+
+Файлы в MinIO Console: http://localhost:9001 (`evoroom` / `evoroomsecret`), бакет `evoroom`.
+
+> Room Composite тяжёлый (Chrome внутри egress). На VDS 2 CPU запись может быть медленной или падать по памяти — смотрите `docker logs evoroom-egress`.
+
 ## Дальше
 
-1. LiveKit Egress — запись start/pause/stop + MinIO  
+1. Пауза записи + список/скачивание в ЛК  
 2. Чат  
 3. Холст + Yjs  
 4. Модули (карты, расстановки, рисование, PDF)  
 5. Бьюти-фон (MediaPipe)  
 6. Архив записей 30 дней → cold storage  
+7. HTTPS / домен  

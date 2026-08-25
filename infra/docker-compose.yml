@@ -74,10 +74,27 @@ services:
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
 
-  # Egress — подключается позже, когда появится комнатный UI
-  # livekit-egress:
-  #   image: livekit/egress:latest
-  #   ...
+  livekit-egress:
+    image: livekit/egress:latest
+    container_name: evoroom-egress
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+      minio:
+        condition: service_started
+    cap_add:
+      - SYS_ADMIN
+    environment:
+      EGRESS_CONFIG_FILE: /etc/egress.yaml
+    volumes:
+      - ./egress.yaml:/etc/egress.yaml:ro
+    # Chrome для Room Composite нужен shared memory
+    shm_size: "1gb"
+    ports:
+      - "8080:8080"
 
 volumes:
   postgres_data:

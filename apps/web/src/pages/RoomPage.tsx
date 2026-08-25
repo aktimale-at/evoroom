@@ -27,6 +27,10 @@ export function RoomPage() {
   const [joined, setJoined] = useState(false);
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [recordingBusy, setRecordingBusy] = useState(false);
+  const [recordingNote, setRecordingNote] = useState('');
+  const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [role, setRole] = useState<'host' | 'participant' | null>(null);
   const [status, setStatus] = useState('Не в комнате');
 
   const roomRef = useRef<Room | null>(null);
@@ -35,6 +39,7 @@ export function RoomPage() {
   const remoteContainerRef = useRef<HTMLDivElement>(null);
 
   const canHostJoin = useMemo(() => asHost && Boolean(user), [asHost, user]);
+  const canRecord = role === 'host' && Boolean(meetingId);
 
   useEffect(() => {
     void api
@@ -140,6 +145,8 @@ export function RoomPage() {
     setError('');
     try {
       const res = await api.joinGuest(slug, { name, password: password || undefined });
+      setMeetingId(res.meetingId);
+      setRole(res.role === 'host' ? 'host' : 'participant');
       await connect(res.livekit.url, res.livekit.token);
       setJoined(true);
     } catch (err) {
@@ -154,12 +161,40 @@ export function RoomPage() {
     setError('');
     try {
       const res = await api.joinHost(slug);
+      setMeetingId(res.meetingId);
+      setRole('host');
       await connect(res.livekit.url, res.livekit.token);
       setJoined(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось войти');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const toggleRecording = async () => {
+    if (!meetingId || !canRecord || recordingBusy) return;
+    setRecordingBusy(true);
+    setRecordingNote('');
+    try {
+      if (recording) {
+        const res = await api.stopRecording(slug, meetingId);
+        setRecording(false);
+        const mins = res.durationSec != null ? Math.round(res.durationSec / 60) : null;
+        setRecordingNote(
+          mins != null
+            ? `Запись сохранена (~${mins} мин) → MinIO: ${res.objectKey || '…'}`
+            : `Запись сохранена → MinIO: ${res.objectKey || '…'}`,
+        );
+      } else {
+        await api.startRecording(slug, meetingId);
+        setRecording(true);
+        setRecordingNote('Идёт запись (Room Composite → MinIO)');
+      }
+    } catch (err) {
+      setRecordingNote(err instanceof Error ? err.message : 'Ошибка записи');
+    } finally {
+      setRecordingBusy(false);
     }
   };
 
@@ -176,7 +211,7 @@ export function RoomPage() {
               <p>Вы вошли как специалист. Можно открыть комнату ведущим.</p>
               {error && <p className="error">{error}</p>}
               <button type="button" disabled={busy} onClick={() => void onJoinHost()}>
-                Войти ведущим (видео + запись дальше)
+                Войти ведущим
               </button>
               <Link to="/app">← В ЛК</Link>
             </div>
@@ -211,14 +246,17 @@ export function RoomPage() {
           <span className="muted"> · {status}</span>
         </div>
         <div className="topbar-right">
-          <button
-            type="button"
-            className={recording ? 'danger' : ''}
-            onClick={() => setRecording((v) => !v)}
-            title="Пайплайн Egress подключим следующим шагом"
-          >
-            {recording ? '■ Стоп записи' : '● Запись'}
-          </button>
+          {canRecord && (
+            <button
+              type="button"
+              className={recording ? 'danger' : ''}
+              disabled={recordingBusy}
+              onClick={() => void toggleRecording()}
+              title="Room Composite Egress → MinIO"
+            >
+              {recordingBusy ? '…' : recording ? '■ Стоп записи' : '● Запись'}
+            </button>
+          )}
           <button
             type="button"
             className="ghost"
@@ -227,6 +265,10 @@ export function RoomPage() {
               localVideoTrackRef.current = null;
               void roomRef.current?.disconnect();
               setJoined(false);
+              setRecording(false);
+              setRecordingNote('');
+              setMeetingId(null);
+              setRole(null);
             }}
           >
             Выйти
@@ -241,7 +283,10 @@ export function RoomPage() {
         <div className="remote-grid" ref={remoteContainerRef} />
       </div>
       <p className="room-hint muted">
-        Видео через LiveKit. Кнопка записи пока UI-заглушка — серверный Egress подключим сразу после стабилизации комнаты.
+        {recordingNote ||
+          (canRecord
+            ? 'Запись: LiveKit Egress (grid) → бакет MinIO evoroom/recordings/…'
+            : 'Видео через LiveKit. Запись доступна ведущему.')}
       </p>
     </div>
   );
