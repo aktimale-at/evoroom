@@ -183,8 +183,8 @@ export function RoomPage() {
         const mins = res.durationSec != null ? Math.round(res.durationSec / 60) : null;
         setRecordingNote(
           mins != null
-            ? `Запись сохранена (~${mins} мин) → MinIO: ${res.objectKey || '…'}`
-            : `Запись сохранена → MinIO: ${res.objectKey || '…'}`,
+            ? `Запись сохранена (~${mins} мин). Скачать в ЛК → /app`
+            : `Запись сохранена. Скачать в ЛК → /app`,
         );
       } else {
         await api.startRecording(slug, meetingId);

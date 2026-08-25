@@ -108,6 +108,30 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.recordings-panel {
+  grid-column: 1 / -1;
+}
+
+.recording-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recording-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
 .row-actions {
   display: flex;
   flex-wrap: wrap;

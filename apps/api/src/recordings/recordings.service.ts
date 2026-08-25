@@ -6,8 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { RecordingStatus } from '@prisma/client';
+import type { Readable } from 'stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { LivekitService } from '../livekit/livekit.service';
+import { MinioService } from '../minio/minio.service';
 
 @Injectable()
 export class RecordingsService {
@@ -16,6 +18,7 @@ export class RecordingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly livekit: LivekitService,
+    private readonly minio: MinioService,
   ) {}
 
   async start(hostId: string, slug: string, meetingId: string) {
@@ -151,6 +154,78 @@ export class RecordingsService {
         startedAt: recording.startedAt,
         endedAt: recording.endedAt,
       },
+    };
+  }
+
+  async listForHost(hostId: string) {
+    const rows = await this.prisma.recording.findMany({
+      where: {
+        meeting: { hostId },
+        status: { in: [RecordingStatus.READY, RecordingStatus.ARCHIVED] },
+        objectKey: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        meeting: {
+          select: {
+            id: true,
+            startedAt: true,
+            room: { select: { id: true, title: true, slug: true } },
+          },
+        },
+      },
+    });
+
+    return rows.map((r) => ({
+      id: r.id,
+      status: r.status,
+      objectKey: r.objectKey,
+      durationSec: r.durationSec,
+      startedAt: r.startedAt,
+      endedAt: r.endedAt,
+      createdAt: r.createdAt,
+      roomTitle: r.meeting.room.title,
+      roomSlug: r.meeting.room.slug,
+      meetingId: r.meeting.id,
+    }));
+  }
+
+  async getDownloadStream(
+    hostId: string,
+    recordingId: string,
+  ): Promise<{ stream: Readable; filename: string; size?: number; contentType: string }> {
+    const recording = await this.prisma.recording.findUnique({
+      where: { id: recordingId },
+      include: { meeting: { include: { room: true } } },
+    });
+    if (!recording) throw new NotFoundException('Запись не найдена');
+    if (recording.meeting.hostId !== hostId || recording.meeting.room.hostId !== hostId) {
+      throw new ForbiddenException('Нет доступа к этой записи');
+    }
+    if (!recording.objectKey) {
+      throw new BadRequestException('У записи нет файла');
+    }
+    if (
+      recording.status !== RecordingStatus.READY &&
+      recording.status !== RecordingStatus.ARCHIVED
+    ) {
+      throw new BadRequestException('Запись ещё не готова к скачиванию');
+    }
+
+    const file = await this.minio.getObjectStream(recording.objectKey);
+    const base = recording.objectKey.split('/').pop() || `${recording.id}.mp4`;
+    const safeTitle = recording.meeting.room.title
+      .replace(/[^\p{L}\p{N}\-_]+/gu, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 40);
+    const filename = `${safeTitle || 'recording'}-${base}`;
+
+    return {
+      stream: file.stream,
+      filename,
+      size: file.size,
+      contentType: file.contentType,
     };
   }
 

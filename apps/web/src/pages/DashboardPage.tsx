@@ -12,18 +12,55 @@ type RoomRow = {
   maxParticipants: number;
 };
 
+type RecordingRow = {
+  id: string;
+  status: string;
+  objectKey: string | null;
+  durationSec: number | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  roomTitle: string;
+  roomSlug: string;
+  meetingId: string;
+};
+
+function formatDuration(sec: number | null) {
+  if (sec == null) return '—';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function formatWhen(iso: string | null) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function DashboardPage() {
   const { user, loading, logout } = useAuth();
   const [rooms, setRooms] = useState<RoomRow[]>([]);
+  const [recordings, setRecordings] = useState<RecordingRow[]>([]);
   const [title, setTitle] = useState('Сессия');
   const [password, setPassword] = useState('');
   const [videoQuality, setVideoQuality] = useState('720p');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [downloadId, setDownloadId] = useState<string | null>(null);
 
   const load = async () => {
-    const list = await api.rooms();
-    setRooms(list);
+    const [roomList, recList] = await Promise.all([api.rooms(), api.listRecordings()]);
+    setRooms(roomList);
+    setRecordings(recList);
   };
 
   useEffect(() => {
@@ -52,6 +89,18 @@ export function DashboardPage() {
       setError(err instanceof Error ? err.message : 'Ошибка');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const onDownload = async (rec: RecordingRow) => {
+    setDownloadId(rec.id);
+    setError('');
+    try {
+      await api.downloadRecording(rec.id, `${rec.roomSlug}-${rec.id.slice(-6)}.mp4`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось скачать');
+    } finally {
+      setDownloadId(null);
     }
   };
 
@@ -118,9 +167,45 @@ export function DashboardPage() {
                     <button
                       type="button"
                       className="ghost"
-                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/r/${room.slug}`)}
+                      onClick={() =>
+                        void navigator.clipboard.writeText(`${window.location.origin}/r/${room.slug}`)
+                      }
                     >
                       Копировать ссылку
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="panel recordings-panel">
+          <h2>Записи</h2>
+          {recordings.length === 0 ? (
+            <p className="muted">
+              Пока нет готовых записей. В комнате нажмите «● Запись», затем «■ Стоп» — файл появится
+              здесь.
+            </p>
+          ) : (
+            <ul className="recording-list">
+              {recordings.map((rec) => (
+                <li key={rec.id}>
+                  <div>
+                    <strong>{rec.roomTitle}</strong>
+                    <div className="muted">
+                      {formatWhen(rec.endedAt || rec.startedAt || rec.createdAt)} ·{' '}
+                      {formatDuration(rec.durationSec)} · {rec.roomSlug}
+                    </div>
+                  </div>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="button"
+                      disabled={downloadId === rec.id}
+                      onClick={() => void onDownload(rec)}
+                    >
+                      {downloadId === rec.id ? 'Скачивание…' : 'Скачать MP4'}
                     </button>
                   </div>
                 </li>

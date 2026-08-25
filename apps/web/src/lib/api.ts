@@ -122,5 +122,48 @@ export const api = {
         durationSec: number | null;
       } | null;
     }>(`/api/rooms/${slug}/meetings/${meetingId}/recording`),
+  listRecordings: () =>
+    request<
+      Array<{
+        id: string;
+        status: string;
+        objectKey: string | null;
+        durationSec: number | null;
+        startedAt: string | null;
+        endedAt: string | null;
+        createdAt: string;
+        roomTitle: string;
+        roomSlug: string;
+        meetingId: string;
+      }>
+    >('/api/recordings'),
+  downloadRecording: async (id: string, fallbackName?: string) => {
+    const token = localStorage.getItem('evoroom_token');
+    const res = await fetch(`${API_BASE}/api/recordings/${id}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const message = (data as { message?: string | string[] }).message;
+      throw new Error(
+        Array.isArray(message) ? message.join(', ') : message || res.statusText || 'Ошибка скачивания',
+      );
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+    const plain = /filename="?([^";]+)"?/i.exec(cd);
+    const filename = star
+      ? decodeURIComponent(star[1])
+      : plain?.[1] || fallbackName || `recording-${id}.mp4`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
   health: () => request<{ ok: boolean; db: boolean }>('/api/health'),
 };
