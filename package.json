@@ -1,0 +1,23 @@
+{
+  "name": "evoroom",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Психологическая студия — видео + холст + ЛК (OSS, self-host)",
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @evoroom/web",
+    "dev:api": "npm run start:dev -w @evoroom/api",
+    "build:web": "npm run build -w @evoroom/web",
+    "build:api": "npm run build -w @evoroom/api",
+    "db:generate": "npm run prisma:generate -w @evoroom/api",
+    "db:migrate": "npm run prisma:migrate -w @evoroom/api",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SPECIALIST
+  ADMIN
+}
+
+enum RoomRole {
+  HOST
+  PARTICIPANT
+  OBSERVER
+}
+
+enum RecordingStatus {
+  IDLE
+  RECORDING
+  PAUSED
+  PROCESSING
+  READY
+  ARCHIVED
+  FAILED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String?
+  name         String
+  role         UserRole  @default(SPECIALIST)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  rooms      Room[]
+  magicCodes MagicCode[]
+  meetings   Meeting[]   @relation("MeetingHost")
+}
+
+model MagicCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([email, code])
+}
+
+model Room {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String
+  hostId       String
+  host         User     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  passwordHash String?
+  /// host_control | collaborative
+  collabMode   String   @default("host_control")
+  maxParticipants Int   @default(10)
+  videoQuality String   @default("720p")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  meetings Meeting[]
+}
+
+model Meeting {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  hostId    String
+  host      User     @relation("MeetingHost", fields: [hostId], references: [id])
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  livekitRoom String?
+
+  recordings Recording[]
+  chatMessages ChatMessage[]
+}
+
+model Recording {
+  id          String          @id @default(cuid())
+  meetingId   String
+  meeting     Meeting         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  status      RecordingStatus @default(IDLE)
+  egressId    String?
+  objectKey   String?
+  archiveKey  String?
+  shareToken  String?         @unique
+  durationSec Int?
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  senderName String
+  senderRole RoomRole @default(PARTICIPANT)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([meetingId, createdAt])
+}
