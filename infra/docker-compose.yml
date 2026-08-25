@@ -70,9 +70,31 @@ services:
     ports:
       - "7880:7880"
       - "7881:7881"
-      - "7882:7882/udp"
+      # WebRTC media (нужно для клиентов за доменом)
+      - "50000-50100:50000-50100/udp"
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: evoroom-caddy
+    restart: unless-stopped
+    depends_on:
+      - livekit
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # email для Let's Encrypt (можно переопределить)
+      CADDY_EMAIL: ${CADDY_EMAIL:-admin@evo-room.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../apps/web/dist:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   livekit-egress:
     image: livekit/egress:latest
@@ -100,3 +122,5 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  caddy_data:
+  caddy_config:

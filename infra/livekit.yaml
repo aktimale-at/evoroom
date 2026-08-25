@@ -1,13 +1,14 @@
-# Dev LiveKit config — не для продакшена
+# LiveKit — прод / VDS (use_external_ip для WebRTC за NAT)
 port: 7880
 rtc:
   tcp_port: 7881
   port_range_start: 50000
   port_range_end: 50100
-  use_external_ip: false
+  use_external_ip: true
 redis:
   address: redis:6379
 keys:
+  # Должны совпадать с LIVEKIT_API_KEY / LIVEKIT_API_SECRET в .env
   devkey: secret
 logging:
   level: info

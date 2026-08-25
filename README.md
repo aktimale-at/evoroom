@@ -79,12 +79,36 @@ prototype     — (старый UI в корне: index.php)
 
 > Room Composite тяжёлый (Chrome внутри egress). На VDS 2 CPU запись может быть медленной или падать по памяти — смотрите `docker logs evoroom-egress`.
 
+## Домен + HTTPS (evo-room.com)
+
+Caddy в Docker: авто-сертификат Let's Encrypt, статика web, прокси `/api` → Nest, `livekit.evo-room.com` → LiveKit.
+
+**DNS:** A-записи `evo-room.com`, `www`, **`livekit.evo-room.com`** → IP VDS.
+
+**Firewall:** `80`, `443`, `7881/tcp`, `50000-50100/udp`.
+
+На VDS:
+
+```bash
+cd /opt/evoroom && git pull
+# DNS livekit.* обязателен до первого старта Caddy
+nano apps/api/.env
+# APP_URL=https://evo-room.com
+# LIVEKIT_PUBLIC_URL=wss://livekit.evo-room.com
+# LIVEKIT_API_URL=http://127.0.0.1:7880
+
+npm install
+npm run build:web
+cd infra && docker compose up -d
+# перезапустить API
+```
+
+Сайт: https://evo-room.com · логи Caddy: `docker logs evoroom-caddy`.
+
 ## Дальше
 
-1. Пауза записи + список/скачивание в ЛК  
-2. Чат  
-3. Холст + Yjs  
-4. Модули (карты, расстановки, рисование, PDF)  
-5. Бьюти-фон (MediaPipe)  
-6. Архив записей 30 дней → cold storage  
-7. HTTPS / домен  
+1. Чат  
+2. Холст + Yjs  
+3. Модули (карты, расстановки, рисование, PDF)  
+4. Бьюти-фон (MediaPipe)  
+5. Архив записей 30 дней → cold storage  

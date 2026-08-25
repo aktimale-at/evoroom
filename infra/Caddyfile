@@ -1,0 +1,27 @@
+# Evoroom — reverse proxy + авто-HTTPS (Let's Encrypt)
+# DNS: A-записи evo-room.com и livekit.evo-room.com → IP VDS
+
+{
+	email admin@evo-room.com
+}
+
+evo-room.com, www.evo-room.com {
+	encode gzip zstd
+
+	# API (Nest на хосте :3001)
+	handle /api/* {
+		reverse_proxy host.docker.internal:3001
+	}
+
+	# Статика React (после npm run build:web)
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# LiveKit signaling (WebSocket). Медиа: UDP 50000–50100 и TCP 7881 напрямую на VDS.
+livekit.evo-room.com {
+	reverse_proxy livekit:7880
+}

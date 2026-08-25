@@ -15,7 +15,8 @@
     "db:generate": "npm run prisma:generate -w @evoroom/api",
     "db:migrate": "npm run prisma:migrate -w @evoroom/api",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
-    "infra:down": "docker compose -f infra/docker-compose.yml down"
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "deploy:domain": "bash infra/deploy-domain.sh"
   },
   "engines": {
     "node": ">=20"
