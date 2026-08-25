@@ -7,6 +7,15 @@ insecure: true
 health_port: 8080
 redis:
   address: redis:6379
+# VDS 2 CPU: дефолт room_composite=4 отказывает в приёме заявок.
+# Для dev снижаем оценку; на проде лучше ≥4 vCPU и вернуть дефолты.
+cpu_cost:
+  max_cpu_utilization: 0.95
+  room_composite_cpu_cost: 1.5
+  web_cpu_cost: 1.5
+  participant_cpu_cost: 1.0
+  track_composite_cpu_cost: 1.0
+  track_cpu_cost: 0.5
 s3:
   access_key: evoroom
   secret: evoroomsecret
