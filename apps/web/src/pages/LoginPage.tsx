@@ -109,6 +109,8 @@ export function LoginPage() {
 
         <p className="muted">
           Нет аккаунта? <Link to="/register">Регистрация</Link>
+          {' · '}
+          <Link to="/">На главную</Link>
         </p>
       </div>
     </div>

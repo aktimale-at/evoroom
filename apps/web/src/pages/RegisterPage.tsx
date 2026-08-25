@@ -52,6 +52,8 @@ export function RegisterPage() {
         </form>
         <p className="muted">
           Уже есть аккаунт? <Link to="/login">Войти</Link>
+          {' · '}
+          <Link to="/">На главную</Link>
         </p>
       </div>
     </div>
