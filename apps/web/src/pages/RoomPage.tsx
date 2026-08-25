@@ -4,6 +4,7 @@ import {
   Room,
   RoomEvent,
   Track,
+  type LocalVideoTrack,
   type RemoteTrack,
   type RemoteTrackPublication,
   type RemoteParticipant,
@@ -30,6 +31,7 @@ export function RoomPage() {
 
   const roomRef = useRef<Room | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const localVideoTrackRef = useRef<LocalVideoTrack | null>(null);
   const remoteContainerRef = useRef<HTMLDivElement>(null);
 
   const canHostJoin = useMemo(() => asHost && Boolean(user), [asHost, user]);
@@ -43,10 +45,24 @@ export function RoomPage() {
 
   useEffect(() => {
     return () => {
+      localVideoTrackRef.current?.stop();
+      localVideoTrackRef.current = null;
       void roomRef.current?.disconnect();
       roomRef.current = null;
     };
   }, []);
+
+  // После появления <video> в DOM — привязать локальный трек
+  useEffect(() => {
+    const el = localVideoRef.current;
+    const track = localVideoTrackRef.current;
+    if (!joined || !el || !track) return;
+    track.attach(el);
+    void el.play().catch(() => {});
+    return () => {
+      track.detach(el);
+    };
+  }, [joined]);
 
   const attachRemote = (track: RemoteTrack, participant: RemoteParticipant) => {
     if (track.kind !== Track.Kind.Video && track.kind !== Track.Kind.Audio) return;
@@ -60,6 +76,7 @@ export function RoomPage() {
       el.autoplay = true;
       if (el instanceof HTMLVideoElement) {
         el.playsInline = true;
+        el.muted = false;
         el.className = 'tile-video';
         const wrap = document.createElement('div');
         wrap.className = 'video-tile';
@@ -83,10 +100,17 @@ export function RoomPage() {
     if (!container) return;
     const wrap = container.querySelector(`[data-track-id="${id}"]`);
     track.detach();
+    wrap?.parentElement?.remove();
     wrap?.remove();
   };
 
   const connect = async (livekitUrl: string, token: string) => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error(
+        'Камера недоступна: откройте сайт по HTTPS или разрешите незащищённый origin в Chrome.',
+      );
+    }
+
     const room = new Room({ adaptiveStream: true, dynacast: true });
     roomRef.current = room;
 
@@ -101,13 +125,13 @@ export function RoomPage() {
     await room.connect(livekitUrl, token);
     setStatus(`В комнате · ${room.name}`);
 
-    const videoTrack = await createLocalVideoTrack({ resolution: { width: 1280, height: 720 } });
+    const videoTrack = await createLocalVideoTrack({
+      resolution: { width: 1280, height: 720 },
+    });
     const audioTrack = await createLocalAudioTrack();
+    localVideoTrackRef.current = videoTrack;
     await room.localParticipant.publishTrack(videoTrack);
     await room.localParticipant.publishTrack(audioTrack);
-    if (localVideoRef.current) {
-      videoTrack.attach(localVideoRef.current);
-    }
   };
 
   const onJoinGuest = async (e: FormEvent) => {
@@ -199,6 +223,8 @@ export function RoomPage() {
             type="button"
             className="ghost"
             onClick={() => {
+              localVideoTrackRef.current?.stop();
+              localVideoTrackRef.current = null;
               void roomRef.current?.disconnect();
               setJoined(false);
             }}
