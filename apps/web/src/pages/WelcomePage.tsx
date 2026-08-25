@@ -27,7 +27,7 @@ export function WelcomePage() {
         <p className="welcome-brand">Evoroom</p>
         <h1 className="welcome-title">Пространство для живой сессии</h1>
         <p className="welcome-lead">
-          Встречайтесь с клиентом онлайн — спокойно, без лишнего между вами.
+          Для сессий, где важны контакт, внимание и общее пространство.
         </p>
         <div className="welcome-cta">
           <Link className="welcome-btn primary" to="/login">
