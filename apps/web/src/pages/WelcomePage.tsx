@@ -27,7 +27,7 @@ export function WelcomePage() {
         <p className="welcome-brand">Evoroom</p>
         <h1 className="welcome-title">Пространство для живой сессии</h1>
         <p className="welcome-lead">
-          Видео, холст и записи для специалистов — у себя на сервере, без чужих облаков.
+          Встречайтесь с клиентом онлайн — спокойно, без лишнего между вами.
         </p>
         <div className="welcome-cta">
           <Link className="welcome-btn primary" to="/login">
@@ -40,7 +40,7 @@ export function WelcomePage() {
       </main>
 
       <footer className="welcome-foot">
-        <span>Self-host · Open source · РФ</span>
+        <span>Для специалистов, которые работают онлайн</span>
       </footer>
     </div>
   );
