@@ -1,16 +1,25 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RequestCodeDto, VerifyCodeDto } from './dto/magic.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly mail: MailService,
   ) {}
 
   private sign(user: { id: string; email: string; name: string }) {
@@ -63,14 +72,29 @@ export class AuthService {
       data: { email, code, expiresAt, userId: user.id },
     });
 
-    // Dev: код в лог (SMTP подключим отдельно)
-    console.log(`[magic-code] ${email} → ${code}`);
-
-    return {
-      ok: true,
-      message: 'Код отправлен (в dev смотрите лог API)',
-      ...(process.env.NODE_ENV !== 'production' ? { devCode: code } : {}),
-    };
+    try {
+      const result = await this.mail.sendMagicCode(email, code);
+      if (!result.sent) {
+        this.logger.warn(`SMTP не настроен — код для ${email}: ${code}`);
+      }
+      return {
+        ok: true,
+        message: result.sent
+          ? 'Код отправлен на почту'
+          : 'SMTP не настроен: код в логе API (и ниже в dev)',
+        ...(result.sent || process.env.NODE_ENV === 'production'
+          ? {}
+          : { devCode: code }),
+      };
+    } catch (err) {
+      this.logger.error(
+        `Не удалось отправить код на ${email}`,
+        err instanceof Error ? err.stack : err,
+      );
+      throw new BadRequestException(
+        'Не удалось отправить письмо. Проверьте SMTP или попробуйте позже.',
+      );
+    }
   }
 
   async verifyCode(dto: VerifyCodeDto) {

@@ -101,9 +101,24 @@ export function LoginPage() {
               </label>
             )}
             {error && <p className="error">{error}</p>}
+            {codeSent && (
+              <p className="muted">
+                Код отправлен на почту{devCode ? ` (dev: ${devCode})` : ''}. Действует 10 минут.
+              </p>
+            )}
             <button disabled={busy} type="submit">
-              {codeSent ? 'Подтвердить' : 'Получить код'}
+              {codeSent ? 'Войти по коду' : 'Отправить код'}
             </button>
+            {codeSent && (
+              <button
+                type="button"
+                className="ghost"
+                disabled={busy}
+                onClick={() => void onRequestCode({ preventDefault() {} } as FormEvent)}
+              >
+                Отправить код ещё раз
+              </button>
+            )}
           </form>
         )}
 
