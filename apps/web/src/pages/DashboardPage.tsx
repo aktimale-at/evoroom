@@ -24,6 +24,8 @@ type RecordingRow = {
   roomSlug: string;
   roomDeleted?: boolean;
   meetingId: string;
+  quality?: string | null;
+  sizeBytes?: number | null;
 };
 
 function formatDuration(sec: number | null) {
@@ -45,6 +47,14 @@ function formatWhen(iso: string | null) {
   } catch {
     return iso;
   }
+}
+
+function formatSize(bytes: number | null | undefined) {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return '—';
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} ГБ`;
 }
 
 function IconTrash() {
@@ -370,7 +380,13 @@ export function DashboardPage() {
                     />
                   </label>
                   <div className="rec-meta">
-                    <strong>{rec.roomTitle}</strong>
+                    <strong>
+                      {rec.roomTitle}
+                      <span className="rec-notes muted">
+                        {' '}
+                        · качество {rec.quality || '720p'} · размер {formatSize(rec.sizeBytes)}
+                      </span>
+                    </strong>
                     <div className="muted">
                       {formatWhen(rec.endedAt || rec.startedAt || rec.createdAt)} ·{' '}
                       {formatDuration(rec.durationSec)} · {rec.roomSlug}

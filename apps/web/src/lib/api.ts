@@ -143,6 +143,8 @@ export const api = {
         roomSlug: string;
         roomDeleted?: boolean;
         meetingId: string;
+        quality?: string | null;
+        sizeBytes?: number | null;
       }>
     >('/api/recordings'),
   deleteRecording: (id: string) =>

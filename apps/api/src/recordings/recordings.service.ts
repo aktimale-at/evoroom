@@ -171,27 +171,44 @@ export class RecordingsService {
           select: {
             id: true,
             startedAt: true,
-            room: { select: { id: true, title: true, slug: true, deletedAt: true } },
+            room: {
+              select: {
+                id: true,
+                title: true,
+                slug: true,
+                deletedAt: true,
+                videoQuality: true,
+              },
+            },
           },
         },
       },
     });
 
-    return rows.map((r) => ({
-      id: r.id,
-      status: r.status,
-      objectKey: r.objectKey,
-      durationSec: r.durationSec,
-      startedAt: r.startedAt,
-      endedAt: r.endedAt,
-      createdAt: r.createdAt,
-      roomTitle: r.meeting.room.deletedAt
-        ? `${r.meeting.room.title} (удалена)`
-        : r.meeting.room.title,
-      roomSlug: r.meeting.room.slug,
-      roomDeleted: Boolean(r.meeting.room.deletedAt),
-      meetingId: r.meeting.id,
-    }));
+    return Promise.all(
+      rows.map(async (r) => {
+        const size = r.objectKey ? await this.minio.statObject(r.objectKey) : null;
+        // Egress: H264_720P_30; room.videoQuality — запасной ярлык
+        const quality = r.meeting.room.videoQuality || '720p';
+        return {
+          id: r.id,
+          status: r.status,
+          objectKey: r.objectKey,
+          durationSec: r.durationSec,
+          startedAt: r.startedAt,
+          endedAt: r.endedAt,
+          createdAt: r.createdAt,
+          roomTitle: r.meeting.room.deletedAt
+            ? `${r.meeting.room.title} (удалена)`
+            : r.meeting.room.title,
+          roomSlug: r.meeting.room.slug,
+          roomDeleted: Boolean(r.meeting.room.deletedAt),
+          meetingId: r.meeting.id,
+          quality,
+          sizeBytes: size?.size ?? null,
+        };
+      }),
+    );
   }
 
   async getDownloadStream(

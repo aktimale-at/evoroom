@@ -46,6 +46,17 @@ export class MinioService {
     }
   }
 
+  async statObject(objectKey: string): Promise<{ size: number } | null> {
+    const key = objectKey.replace(/^\//, '');
+    try {
+      const stat = await this.client.statObject(this.bucket, key);
+      return { size: stat.size };
+    } catch (err) {
+      this.logger.warn(`MinIO stat failed for ${key}: ${err instanceof Error ? err.message : err}`);
+      return null;
+    }
+  }
+
   async removeObject(objectKey: string): Promise<void> {
     const key = objectKey.replace(/^\//, '');
     try {
