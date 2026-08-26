@@ -580,10 +580,6 @@ button.video-tile.thumb:focus-visible {
   object-fit: cover;
   background: #0a0a14;
   display: block;
-}
-
-/* Своё видео — как в зеркале (собеседник видит без зеркала) */
-.video-tile.local .tile-video {
   transform: scaleX(-1);
 }
 
