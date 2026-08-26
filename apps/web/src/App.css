@@ -248,6 +248,50 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.invite-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(420px, 55vw);
+  padding: 6px 8px 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.invite-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #8a8a9e;
+}
+
+.invite-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #c8c8d8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.invite-copy {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(74, 108, 247, 0.2);
+  border: 1px solid rgba(74, 108, 247, 0.35);
+  color: #c5d0ff;
+}
+
+.invite-copy:hover {
+  background: rgba(74, 108, 247, 0.35);
 }
 
 .dashboard {

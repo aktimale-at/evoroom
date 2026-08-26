@@ -32,6 +32,7 @@ export function RoomPage() {
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [role, setRole] = useState<'host' | 'participant' | null>(null);
   const [status, setStatus] = useState('Не в комнате');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const roomRef = useRef<Room | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -40,6 +41,20 @@ export function RoomPage() {
 
   const canHostJoin = useMemo(() => asHost && Boolean(user), [asHost, user]);
   const canRecord = role === 'host' && Boolean(meetingId);
+  const guestInviteUrl = useMemo(
+    () => `${window.location.origin}/r/${slug}`,
+    [slug],
+  );
+
+  const copyGuestLink = async () => {
+    try {
+      await navigator.clipboard.writeText(guestInviteUrl);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setRecordingNote('Не удалось скопировать ссылку');
+    }
+  };
 
   useEffect(() => {
     void api
@@ -246,6 +261,49 @@ export function RoomPage() {
           <span className="muted"> · {status}</span>
         </div>
         <div className="topbar-right">
+          {role === 'host' && (
+            <div className="invite-link" title={guestInviteUrl}>
+              <span className="invite-label">Ссылка для участников</span>
+              <code className="invite-url">{guestInviteUrl}</code>
+              <button
+                type="button"
+                className="invite-copy"
+                onClick={() => void copyGuestLink()}
+                aria-label="Копировать ссылку"
+                title={linkCopied ? 'Скопировано' : 'Копировать'}
+              >
+                {linkCopied ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M5 13l4 4L19 7"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <rect
+                      x="9"
+                      y="9"
+                      width="11"
+                      height="11"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <path
+                      d="M5 15V5a2 2 0 0 1 2-2h10"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                )}
+              </button>
+            </div>
+          )}
           {canRecord && (
             <button
               type="button"
@@ -269,6 +327,7 @@ export function RoomPage() {
               setRecordingNote('');
               setMeetingId(null);
               setRole(null);
+              setLinkCopied(false);
             }}
           >
             Выйти
