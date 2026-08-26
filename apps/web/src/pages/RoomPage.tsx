@@ -6,13 +6,77 @@ import {
   Track,
   type LocalVideoTrack,
   type RemoteTrack,
-  type RemoteTrackPublication,
   type RemoteParticipant,
   createLocalVideoTrack,
   createLocalAudioTrack,
 } from 'livekit-client';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
+
+type VideoTile = {
+  key: string;
+  label: string;
+  isLocal: boolean;
+  videoTrack: LocalVideoTrack | RemoteTrack | null;
+};
+
+function MediaTile({
+  tile,
+  active,
+  large,
+  onSelect,
+}: {
+  tile: VideoTile;
+  active: boolean;
+  large?: boolean;
+  onSelect?: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    const track = tile.videoTrack;
+    if (!el || !track || track.kind !== Track.Kind.Video) return;
+    track.attach(el);
+    void el.play().catch(() => {});
+    return () => {
+      track.detach(el);
+    };
+  }, [tile.videoTrack, tile.key]);
+
+  const className = `video-tile ${tile.isLocal ? 'local' : ''} ${active ? 'active' : ''} ${
+    large ? 'large' : 'thumb'
+  }`;
+
+  const media = (
+    <>
+      <video
+        ref={videoRef}
+        autoPlay
+        muted={tile.isLocal}
+        playsInline
+        className="tile-video"
+      />
+      <div className="name-tag">{tile.label}</div>
+    </>
+  );
+
+  if (large || !onSelect) {
+    return <div className={className}>{media}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={onSelect}
+      aria-pressed={active}
+      title={`Показать: ${tile.label}`}
+    >
+      {media}
+    </button>
+  );
+}
 
 export function RoomPage() {
   const { slug = '' } = useParams();
@@ -33,18 +97,28 @@ export function RoomPage() {
   const [role, setRole] = useState<'host' | 'participant' | null>(null);
   const [status, setStatus] = useState('Не в комнате');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [remoteVideos, setRemoteVideos] = useState<VideoTile[]>([]);
+  const [localVideoTrack, setLocalVideoTrack] = useState<LocalVideoTrack | null>(null);
+  const [focusKey, setFocusKey] = useState('local');
 
   const roomRef = useRef<Room | null>(null);
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const localVideoTrackRef = useRef<LocalVideoTrack | null>(null);
-  const remoteContainerRef = useRef<HTMLDivElement>(null);
 
   const canHostJoin = useMemo(() => asHost && Boolean(user), [asHost, user]);
   const canRecord = role === 'host' && Boolean(meetingId);
-  const guestInviteUrl = useMemo(
-    () => `${window.location.origin}/r/${slug}`,
-    [slug],
-  );
+  const guestInviteUrl = useMemo(() => `${window.location.origin}/r/${slug}`, [slug]);
+
+  const tiles = useMemo<VideoTile[]>(() => {
+    const local: VideoTile = {
+      key: 'local',
+      label: 'Вы',
+      isLocal: true,
+      videoTrack: localVideoTrack,
+    };
+    return [local, ...remoteVideos];
+  }, [localVideoTrack, remoteVideos]);
+
+  const focusTile = tiles.find((t) => t.key === focusKey) ?? tiles[0];
+  const stripTiles = tiles.filter((t) => t.key !== focusTile?.key);
 
   const copyGuestLink = async () => {
     try {
@@ -65,63 +139,52 @@ export function RoomPage() {
 
   useEffect(() => {
     return () => {
-      localVideoTrackRef.current?.stop();
-      localVideoTrackRef.current = null;
+      localVideoTrack?.stop();
       void roomRef.current?.disconnect();
       roomRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
   }, []);
 
-  // После появления <video> в DOM — привязать локальный трек
   useEffect(() => {
-    const el = localVideoRef.current;
-    const track = localVideoTrackRef.current;
-    if (!joined || !el || !track) return;
-    track.attach(el);
-    void el.play().catch(() => {});
-    return () => {
-      track.detach(el);
-    };
-  }, [joined]);
-
-  const attachRemote = (track: RemoteTrack, participant: RemoteParticipant) => {
-    if (track.kind !== Track.Kind.Video && track.kind !== Track.Kind.Audio) return;
-    const container = remoteContainerRef.current;
-    if (!container) return;
-    const id = `${participant.identity}-${track.sid}`;
-    let el = container.querySelector(`[data-track-id="${id}"]`) as HTMLMediaElement | null;
-    if (!el) {
-      el = document.createElement(track.kind === Track.Kind.Video ? 'video' : 'audio');
-      el.dataset.trackId = id;
-      el.autoplay = true;
-      if (el instanceof HTMLVideoElement) {
-        el.playsInline = true;
-        el.muted = false;
-        el.className = 'tile-video';
-        const wrap = document.createElement('div');
-        wrap.className = 'video-tile';
-        wrap.dataset.trackId = id;
-        const label = document.createElement('div');
-        label.className = 'name-tag';
-        label.textContent = participant.name || participant.identity;
-        wrap.appendChild(el);
-        wrap.appendChild(label);
-        container.appendChild(wrap);
-      } else {
-        container.appendChild(el);
-      }
+    if (!tiles.some((t) => t.key === focusKey)) {
+      setFocusKey(remoteVideos[0]?.key ?? 'local');
     }
-    track.attach(el);
+  }, [tiles, focusKey, remoteVideos]);
+
+  const upsertRemoteVideo = (track: RemoteTrack, participant: RemoteParticipant) => {
+    if (track.kind !== Track.Kind.Video) return;
+    const key = `remote:${participant.identity}`;
+    const tile: VideoTile = {
+      key,
+      label: participant.name || participant.identity,
+      isLocal: false,
+      videoTrack: track,
+    };
+    setRemoteVideos((prev) => {
+      const next = [...prev.filter((t) => t.key !== key), tile];
+      if (prev.length === 0) setFocusKey(key);
+      return next;
+    });
   };
 
-  const detachRemote = (track: RemoteTrack, participant: RemoteParticipant) => {
-    const id = `${participant.identity}-${track.sid}`;
-    const container = remoteContainerRef.current;
-    if (!container) return;
-    const wrap = container.querySelector(`[data-track-id="${id}"]`);
-    track.detach();
-    wrap?.parentElement?.remove();
-    wrap?.remove();
+  const removeRemoteVideo = (participant: RemoteParticipant) => {
+    const key = `remote:${participant.identity}`;
+    setRemoteVideos((prev) => prev.filter((t) => t.key !== key));
+  };
+
+  const attachExistingRemotes = (room: Room) => {
+    for (const participant of room.remoteParticipants.values()) {
+      for (const publication of participant.trackPublications.values()) {
+        const track = publication.track;
+        if (track?.kind === Track.Kind.Video) {
+          upsertRemoteVideo(track as RemoteTrack, participant);
+        }
+        if (track?.kind === Track.Kind.Audio) {
+          track.attach();
+        }
+      }
+    }
   };
 
   const connect = async (livekitUrl: string, token: string) => {
@@ -131,14 +194,26 @@ export function RoomPage() {
       );
     }
 
+    setRemoteVideos([]);
+    setFocusKey('local');
+
     const room = new Room({ adaptiveStream: true, dynacast: true });
     roomRef.current = room;
 
-    room.on(RoomEvent.TrackSubscribed, (track, _pub: RemoteTrackPublication, participant) => {
-      attachRemote(track, participant);
+    room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+      if (track.kind === Track.Kind.Audio) {
+        track.attach();
+        return;
+      }
+      if (track.kind === Track.Kind.Video) {
+        upsertRemoteVideo(track, participant);
+      }
     });
     room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
-      detachRemote(track, participant);
+      if (track.kind === Track.Kind.Video) removeRemoteVideo(participant);
+    });
+    room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      removeRemoteVideo(participant);
     });
     room.on(RoomEvent.Disconnected, () => setStatus('Отключено'));
 
@@ -149,9 +224,28 @@ export function RoomPage() {
       resolution: { width: 1280, height: 720 },
     });
     const audioTrack = await createLocalAudioTrack();
-    localVideoTrackRef.current = videoTrack;
+    setLocalVideoTrack(videoTrack);
     await room.localParticipant.publishTrack(videoTrack);
     await room.localParticipant.publishTrack(audioTrack);
+
+    // Guest joins after host: tracks already in room must be attached now
+    attachExistingRemotes(room);
+  };
+
+  const leaveRoom = () => {
+    localVideoTrack?.stop();
+    setLocalVideoTrack(null);
+    setRemoteVideos([]);
+    setFocusKey('local');
+    void roomRef.current?.disconnect();
+    roomRef.current = null;
+    setJoined(false);
+    setRecording(false);
+    setRecordingNote('');
+    setMeetingId(null);
+    setRole(null);
+    setLinkCopied(false);
+    setStatus('Не в комнате');
   };
 
   const onJoinGuest = async (e: FormEvent) => {
@@ -199,7 +293,7 @@ export function RoomPage() {
         setRecordingNote(
           mins != null
             ? `Запись сохранена (~${mins} мин). Скачать в ЛК → /app`
-            : `Запись сохранена. Скачать в ЛК → /app`,
+            : 'Запись сохранена. Скачать в ЛК → /app',
         );
       } else {
         await api.startRecording(slug, meetingId);
@@ -231,7 +325,7 @@ export function RoomPage() {
               <Link to="/app">← В ЛК</Link>
             </div>
           ) : (
-            <form className="stack" onSubmit={onJoinGuest}>
+            <form className="stack" onSubmit={(e) => void onJoinGuest(e)}>
               <label>
                 Ваше имя
                 <input value={name} onChange={(e) => setName(e.target.value)} required />
@@ -239,7 +333,12 @@ export function RoomPage() {
               {roomMeta?.hasPassword && (
                 <label>
                   Пароль комнаты
-                  <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
+                  <input
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    type="password"
+                    required
+                  />
                 </label>
               )}
               {error && <p className="error">{error}</p>}
@@ -272,35 +371,7 @@ export function RoomPage() {
                 aria-label="Копировать ссылку"
                 title={linkCopied ? 'Скопировано' : 'Копировать'}
               >
-                {linkCopied ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <path
-                      d="M5 13l4 4L19 7"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <rect
-                      x="9"
-                      y="9"
-                      width="11"
-                      height="11"
-                      rx="2"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    />
-                    <path
-                      d="M5 15V5a2 2 0 0 1 2-2h10"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                )}
+                {linkCopied ? '✓' : '⧉'}
               </button>
             </div>
           )}
@@ -310,42 +381,39 @@ export function RoomPage() {
               className={recording ? 'danger' : ''}
               disabled={recordingBusy}
               onClick={() => void toggleRecording()}
-              title="Room Composite Egress → MinIO"
             >
               {recordingBusy ? '…' : recording ? '■ Стоп записи' : '● Запись'}
             </button>
           )}
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              localVideoTrackRef.current?.stop();
-              localVideoTrackRef.current = null;
-              void roomRef.current?.disconnect();
-              setJoined(false);
-              setRecording(false);
-              setRecordingNote('');
-              setMeetingId(null);
-              setRole(null);
-              setLinkCopied(false);
-            }}
-          >
+          <button type="button" className="ghost" onClick={leaveRoom}>
             Выйти
           </button>
         </div>
       </header>
-      <div className="room-grid">
-        <div className="video-tile local">
-          <video ref={localVideoRef} autoPlay muted playsInline className="tile-video" />
-          <div className="name-tag">Вы</div>
-        </div>
-        <div className="remote-grid" ref={remoteContainerRef} />
+
+      <div className="room-stage">
+        {focusTile && <MediaTile tile={focusTile} active large />}
+        {stripTiles.length > 0 && (
+          <div className="video-strip" role="list">
+            {stripTiles.map((tile) => (
+              <MediaTile
+                key={tile.key}
+                tile={tile}
+                active={false}
+                onSelect={() => setFocusKey(tile.key)}
+              />
+            ))}
+          </div>
+        )}
       </div>
+
       <p className="room-hint muted">
         {recordingNote ||
-          (canRecord
-            ? 'Запись: LiveKit Egress (grid) → бакет MinIO evoroom/recordings/…'
-            : 'Видео через LiveKit. Запись доступна ведущему.')}
+          (tiles.length > 1
+            ? 'Нажмите на миниатюру, чтобы переключить главное видео.'
+            : canRecord
+              ? 'Запись: LiveKit Egress → MinIO'
+              : 'Ожидание второго участника…')}
       </p>
     </div>
   );
