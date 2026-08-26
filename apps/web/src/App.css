@@ -582,6 +582,11 @@ button.video-tile.thumb:focus-visible {
   display: block;
 }
 
+/* Своё видео — как в зеркале (собеседник видит без зеркала) */
+.video-tile.local .tile-video {
+  transform: scaleX(-1);
+}
+
 .name-tag {
   position: absolute;
   left: 10px;
