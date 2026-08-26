@@ -10,14 +10,13 @@ import { LivekitService } from '../livekit/livekit.service';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { JoinRoomDto } from './dto/join-room.dto';
 
-function slugify(input: string) {
-  const base = input
-    .toLowerCase()
-    .replace(/[^a-z0-9а-яё]+/gi, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
-  const suffix = Math.random().toString(36).slice(2, 7);
-  return `${base || 'room'}-${suffix}`;
+function generateRoomSlug(length = 8) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return out;
 }
 
 @Injectable()
@@ -26,6 +25,19 @@ export class RoomsService {
     private readonly prisma: PrismaService,
     private readonly livekit: LivekitService,
   ) {}
+
+  private async uniqueSlug() {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const slug = generateRoomSlug(8);
+      const exists = await this.prisma.room.findUnique({
+        where: { slug },
+        select: { id: true },
+      });
+      if (!exists) return slug;
+    }
+    // запасной вариант длиннее
+    return generateRoomSlug(12);
+  }
 
   listForHost(hostId: string) {
     return this.prisma.room.findMany({
@@ -46,7 +58,7 @@ export class RoomsService {
   }
 
   async create(hostId: string, dto: CreateRoomDto) {
-    const slug = slugify(dto.title);
+    const slug = await this.uniqueSlug();
     const passwordHash = dto.password ? await bcrypt.hash(dto.password, 10) : null;
     return this.prisma.room.create({
       data: {
