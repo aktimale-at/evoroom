@@ -525,6 +525,12 @@
   aspect-ratio: auto;
 }
 
+.room-stage > .video-tile.large .tile-video {
+  /* contain: меньше «мыла» при апскейле, чем cover на низком слое */
+  object-fit: contain;
+  background: #05050c;
+}
+
 .video-strip {
   display: flex;
   flex-direction: column;

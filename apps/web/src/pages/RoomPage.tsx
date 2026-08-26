@@ -4,9 +4,12 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoPresets,
+  VideoQuality,
   type LocalVideoTrack,
   type RemoteTrack,
   type RemoteParticipant,
+  type RemoteTrackPublication,
   createLocalVideoTrack,
   createLocalAudioTrack,
 } from 'livekit-client';
@@ -173,11 +176,21 @@ export function RoomPage() {
     setRemoteVideos((prev) => prev.filter((t) => t.key !== key));
   };
 
+  const preferHighQuality = (publication?: RemoteTrackPublication) => {
+    if (!publication || publication.kind !== Track.Kind.Video) return;
+    try {
+      publication.setVideoQuality(VideoQuality.HIGH);
+    } catch {
+      // older browsers / no simulcast — ignore
+    }
+  };
+
   const attachExistingRemotes = (room: Room) => {
     for (const participant of room.remoteParticipants.values()) {
       for (const publication of participant.trackPublications.values()) {
         const track = publication.track;
         if (track?.kind === Track.Kind.Video) {
+          preferHighQuality(publication as RemoteTrackPublication);
           upsertRemoteVideo(track as RemoteTrack, participant);
         }
         if (track?.kind === Track.Kind.Audio) {
@@ -197,15 +210,30 @@ export function RoomPage() {
     setRemoteVideos([]);
     setFocusKey('local');
 
-    const room = new Room({ adaptiveStream: true, dynacast: true });
+    // adaptiveStream off: for 1:1 it often sticks on a low layer (noise + freezes on big screen)
+    const room = new Room({
+      adaptiveStream: false,
+      dynacast: true,
+      publishDefaults: {
+        videoCodec: 'h264',
+        videoEncoding: {
+          maxBitrate: 2_500_000,
+          maxFramerate: 30,
+        },
+        simulcast: true,
+        videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+        degradationPreference: 'maintain-resolution',
+      },
+    });
     roomRef.current = room;
 
-    room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+    room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
       if (track.kind === Track.Kind.Audio) {
         track.attach();
         return;
       }
       if (track.kind === Track.Kind.Video) {
+        preferHighQuality(publication);
         upsertRemoteVideo(track, participant);
       }
     });
@@ -221,11 +249,27 @@ export function RoomPage() {
     setStatus(`В комнате · ${room.name}`);
 
     const videoTrack = await createLocalVideoTrack({
-      resolution: { width: 1280, height: 720 },
+      resolution: {
+        width: VideoPresets.h720.width,
+        height: VideoPresets.h720.height,
+        frameRate: 30,
+      },
+      facingMode: 'user',
     });
-    const audioTrack = await createLocalAudioTrack();
+    const audioTrack = await createLocalAudioTrack({
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    });
     setLocalVideoTrack(videoTrack);
-    await room.localParticipant.publishTrack(videoTrack);
+    await room.localParticipant.publishTrack(videoTrack, {
+      source: Track.Source.Camera,
+      videoCodec: 'h264',
+      videoEncoding: {
+        maxBitrate: 2_500_000,
+        maxFramerate: 30,
+      },
+    });
     await room.localParticipant.publishTrack(audioTrack);
 
     // Guest joins after host: tracks already in room must be attached now
