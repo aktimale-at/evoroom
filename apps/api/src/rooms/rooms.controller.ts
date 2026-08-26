@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RoomsService } from './rooms.service';
 import { CreateRoomDto } from './dto/create-room.dto';
@@ -23,6 +23,12 @@ export class RoomsController {
   @Get(':slug')
   getPublic(@Param('slug') slug: string) {
     return this.rooms.getBySlug(slug);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Delete(':slug')
+  remove(@Req() req: { user: { id: string } }, @Param('slug') slug: string) {
+    return this.rooms.remove(req.user.id, slug);
   }
 
   @Post(':slug/join')

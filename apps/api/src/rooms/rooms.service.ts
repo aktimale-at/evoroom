@@ -82,6 +82,15 @@ export class RoomsService {
     });
   }
 
+  async remove(hostId: string, slug: string) {
+    const room = await this.prisma.room.findUnique({ where: { slug } });
+    if (!room) throw new NotFoundException('Комната не найдена');
+    if (room.hostId !== hostId) throw new ForbiddenException('Нет доступа');
+
+    await this.prisma.room.delete({ where: { id: room.id } });
+    return { ok: true, slug };
+  }
+
   async getBySlug(slug: string) {
     const room = await this.prisma.room.findUnique({
       where: { slug },

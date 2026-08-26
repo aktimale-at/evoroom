@@ -68,6 +68,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  deleteRoom: (slug: string) =>
+    request<{ ok: boolean; slug: string }>(`/api/rooms/${slug}`, { method: 'DELETE' }),
   getRoom: (slug: string) =>
     request<{
       id: string;

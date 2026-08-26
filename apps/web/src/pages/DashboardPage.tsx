@@ -56,6 +56,7 @@ export function DashboardPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [downloadId, setDownloadId] = useState<string | null>(null);
+  const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
 
   const load = async () => {
     const [roomList, recList] = await Promise.all([api.rooms(), api.listRecordings()]);
@@ -101,6 +102,23 @@ export function DashboardPage() {
       setError(err instanceof Error ? err.message : 'Не удалось скачать');
     } finally {
       setDownloadId(null);
+    }
+  };
+
+  const onDeleteRoom = async (room: RoomRow) => {
+    const ok = window.confirm(
+      `Вы уверены?\n\nКомната «${room.title}» и связанные встречи будут удалены. Это действие нельзя отменить.`,
+    );
+    if (!ok) return;
+    setDeletingSlug(room.slug);
+    setError('');
+    try {
+      await api.deleteRoom(room.slug);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось удалить');
+    } finally {
+      setDeletingSlug(null);
     }
   };
 
@@ -172,6 +190,14 @@ export function DashboardPage() {
                       }
                     >
                       Копировать ссылку
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={deletingSlug === room.slug}
+                      onClick={() => void onDeleteRoom(room)}
+                    >
+                      {deletingSlug === room.slug ? 'Удаление…' : 'Удалить'}
                     </button>
                   </div>
                 </li>
