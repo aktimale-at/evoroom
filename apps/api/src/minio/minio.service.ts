@@ -45,4 +45,15 @@ export class MinioService {
       throw new NotFoundException('Файл записи не найден в хранилище');
     }
   }
+
+  async removeObject(objectKey: string): Promise<void> {
+    const key = objectKey.replace(/^\//, '');
+    try {
+      await this.client.removeObject(this.bucket, key);
+    } catch (err) {
+      this.logger.warn(
+        `MinIO remove failed for ${key}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
 }

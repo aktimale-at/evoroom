@@ -1,5 +1,7 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -11,6 +13,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
 import { RecordingsService } from './recordings.service';
+import { DeleteRecordingsDto } from './dto/delete-recordings.dto';
 
 @Controller()
 @UseGuards(AuthGuard('jwt'))
@@ -49,6 +52,16 @@ export class RecordingsController {
     return this.recordings.listForHost(req.user.id);
   }
 
+  @Post('recordings/delete')
+  deleteMany(@Req() req: { user: { id: string } }, @Body() dto: DeleteRecordingsDto) {
+    return this.recordings.deleteMany(req.user.id, dto.ids);
+  }
+
+  @Delete('recordings/:id')
+  deleteOne(@Req() req: { user: { id: string } }, @Param('id') id: string) {
+    return this.recordings.deleteOne(req.user.id, id);
+  }
+
   @Get('recordings/:id/download')
   async download(
     @Req() req: { user: { id: string } },
@@ -63,6 +76,25 @@ export class RecordingsController {
     res.setHeader(
       'Content-Disposition',
       `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    if (size != null) res.setHeader('Content-Length', String(size));
+    return new StreamableFile(stream);
+  }
+
+  @Get('recordings/:id/stream')
+  async stream(
+    @Req() req: { user: { id: string } },
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { stream, filename, size, contentType } = await this.recordings.getDownloadStream(
+      req.user.id,
+      id,
+    );
+    res.setHeader('Content-Type', contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename*=UTF-8''${encodeURIComponent(filename)}`,
     );
     if (size != null) res.setHeader('Content-Length', String(size));
     return new StreamableFile(stream);

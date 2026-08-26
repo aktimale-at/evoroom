@@ -66,6 +66,7 @@ model Room {
   collabMode   String   @default("host_control")
   maxParticipants Int   @default(10)
   videoQuality String   @default("720p")
+  deletedAt    DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

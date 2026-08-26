@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RoomsService } from './rooms.service';
 import { CreateRoomDto } from './dto/create-room.dto';
@@ -27,8 +37,14 @@ export class RoomsController {
 
   @UseGuards(AuthGuard('jwt'))
   @Delete(':slug')
-  remove(@Req() req: { user: { id: string } }, @Param('slug') slug: string) {
-    return this.rooms.remove(req.user.id, slug);
+  remove(
+    @Req() req: { user: { id: string } },
+    @Param('slug') slug: string,
+    @Query('deleteVideos') deleteVideos?: string,
+  ) {
+    const purge =
+      deleteVideos === '1' || deleteVideos === 'true' || deleteVideos === 'yes';
+    return this.rooms.remove(req.user.id, slug, purge);
   }
 
   @Post(':slug/join')

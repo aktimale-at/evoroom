@@ -68,8 +68,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  deleteRoom: (slug: string) =>
-    request<{ ok: boolean; slug: string }>(`/api/rooms/${slug}`, { method: 'DELETE' }),
+  deleteRoom: (slug: string, opts?: { deleteVideos?: boolean }) => {
+    const q = opts?.deleteVideos ? '?deleteVideos=true' : '';
+    return request<{ ok: boolean; slug: string; deletedVideos?: boolean }>(
+      `/api/rooms/${slug}${q}`,
+      { method: 'DELETE' },
+    );
+  },
   getRoom: (slug: string) =>
     request<{
       id: string;
@@ -136,19 +141,29 @@ export const api = {
         createdAt: string;
         roomTitle: string;
         roomSlug: string;
+        roomDeleted?: boolean;
         meetingId: string;
       }>
     >('/api/recordings'),
-  downloadRecording: async (id: string, fallbackName?: string) => {
+  deleteRecording: (id: string) =>
+    request<{ ok: boolean; id: string }>(`/api/recordings/${id}`, { method: 'DELETE' }),
+  deleteRecordings: (ids: string[]) =>
+    request<{ ok: boolean; deleted: number; requested: number }>('/api/recordings/delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  fetchRecordingBlob: async (id: string, mode: 'download' | 'stream' = 'download') => {
     const token = localStorage.getItem('evoroom_token');
-    const res = await fetch(`${API_BASE}/api/recordings/${id}/download`, {
+    const res = await fetch(`${API_BASE}/api/recordings/${id}/${mode}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       const message = (data as { message?: string | string[] }).message;
       throw new Error(
-        Array.isArray(message) ? message.join(', ') : message || res.statusText || 'Ошибка скачивания',
+        Array.isArray(message)
+          ? message.join(', ')
+          : message || res.statusText || 'Ошибка загрузки видео',
       );
     }
     const blob = await res.blob();
@@ -157,11 +172,15 @@ export const api = {
     const plain = /filename="?([^";]+)"?/i.exec(cd);
     const filename = star
       ? decodeURIComponent(star[1])
-      : plain?.[1] || fallbackName || `recording-${id}.mp4`;
+      : plain?.[1] || `recording-${id}.mp4`;
+    return { blob, filename };
+  },
+  downloadRecording: async (id: string, fallbackName?: string) => {
+    const { blob, filename } = await api.fetchRecordingBlob(id, 'download');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = fallbackName || filename;
     document.body.appendChild(a);
     a.click();
     a.remove();

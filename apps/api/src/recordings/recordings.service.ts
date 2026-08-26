@@ -171,7 +171,7 @@ export class RecordingsService {
           select: {
             id: true,
             startedAt: true,
-            room: { select: { id: true, title: true, slug: true } },
+            room: { select: { id: true, title: true, slug: true, deletedAt: true } },
           },
         },
       },
@@ -185,8 +185,11 @@ export class RecordingsService {
       startedAt: r.startedAt,
       endedAt: r.endedAt,
       createdAt: r.createdAt,
-      roomTitle: r.meeting.room.title,
+      roomTitle: r.meeting.room.deletedAt
+        ? `${r.meeting.room.title} (удалена)`
+        : r.meeting.room.title,
       roomSlug: r.meeting.room.slug,
+      roomDeleted: Boolean(r.meeting.room.deletedAt),
       meetingId: r.meeting.id,
     }));
   }
@@ -227,6 +230,45 @@ export class RecordingsService {
       size: file.size,
       contentType: file.contentType,
     };
+  }
+
+  async deleteOne(hostId: string, recordingId: string) {
+    const recording = await this.loadHostRecording(hostId, recordingId);
+    if (recording.objectKey) {
+      await this.minio.removeObject(recording.objectKey);
+    }
+    await this.prisma.recording.delete({ where: { id: recording.id } });
+    return { ok: true, id: recording.id };
+  }
+
+  async deleteMany(hostId: string, ids: string[]) {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (!unique.length) throw new BadRequestException('Не выбраны записи');
+
+    let deleted = 0;
+    for (const id of unique) {
+      try {
+        await this.deleteOne(hostId, id);
+        deleted += 1;
+      } catch (err) {
+        this.logger.warn(
+          `Skip delete ${id}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+    return { ok: true, deleted, requested: unique.length };
+  }
+
+  private async loadHostRecording(hostId: string, recordingId: string) {
+    const recording = await this.prisma.recording.findUnique({
+      where: { id: recordingId },
+      include: { meeting: { include: { room: true } } },
+    });
+    if (!recording) throw new NotFoundException('Запись не найдена');
+    if (recording.meeting.hostId !== hostId || recording.meeting.room.hostId !== hostId) {
+      throw new ForbiddenException('Нет доступа к этой записи');
+    }
+    return recording;
   }
 
   private async loadHostMeeting(hostId: string, slug: string, meetingId: string) {

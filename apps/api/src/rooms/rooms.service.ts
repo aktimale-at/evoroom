@@ -3,10 +3,12 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { LivekitService } from '../livekit/livekit.service';
+import { MinioService } from '../minio/minio.service';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { JoinRoomDto } from './dto/join-room.dto';
 
@@ -21,9 +23,12 @@ function generateRoomSlug(length = 8) {
 
 @Injectable()
 export class RoomsService {
+  private readonly logger = new Logger(RoomsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly livekit: LivekitService,
+    private readonly minio: MinioService,
   ) {}
 
   private async uniqueSlug() {
@@ -35,13 +40,18 @@ export class RoomsService {
       });
       if (!exists) return slug;
     }
-    // запасной вариант длиннее
     return generateRoomSlug(12);
+  }
+
+  private assertActiveRoom<T extends { deletedAt: Date | null }>(
+    room: T | null,
+  ): asserts room is T {
+    if (!room || room.deletedAt) throw new NotFoundException('Комната не найдена');
   }
 
   listForHost(hostId: string) {
     return this.prisma.room.findMany({
-      where: { hostId },
+      where: { hostId, deletedAt: null },
       orderBy: { updatedAt: 'desc' },
       select: {
         id: true,
@@ -82,13 +92,34 @@ export class RoomsService {
     });
   }
 
-  async remove(hostId: string, slug: string) {
+  /**
+   * По умолчанию — soft-delete: комната скрывается, видео остаются.
+   * deleteVideos=true — удаляет файлы в MinIO и комнату полностью.
+   */
+  async remove(hostId: string, slug: string, deleteVideos = false) {
     const room = await this.prisma.room.findUnique({ where: { slug } });
-    if (!room) throw new NotFoundException('Комната не найдена');
+    if (!room || room.deletedAt) throw new NotFoundException('Комната не найдена');
     if (room.hostId !== hostId) throw new ForbiddenException('Нет доступа');
 
-    await this.prisma.room.delete({ where: { id: room.id } });
-    return { ok: true, slug };
+    if (deleteVideos) {
+      const recordings = await this.prisma.recording.findMany({
+        where: { meeting: { roomId: room.id }, objectKey: { not: null } },
+        select: { id: true, objectKey: true },
+      });
+      for (const rec of recordings) {
+        if (rec.objectKey) await this.minio.removeObject(rec.objectKey);
+      }
+      await this.prisma.room.delete({ where: { id: room.id } });
+      this.logger.log(`Room ${slug} hard-deleted with ${recordings.length} video(s)`);
+      return { ok: true, slug, deletedVideos: recordings.length, soft: false };
+    }
+
+    await this.prisma.room.update({
+      where: { id: room.id },
+      data: { deletedAt: new Date() },
+    });
+    this.logger.log(`Room ${slug} soft-deleted (videos kept)`);
+    return { ok: true, slug, deletedVideos: 0, soft: true };
   }
 
   async getBySlug(slug: string) {
@@ -102,11 +133,12 @@ export class RoomsService {
         maxParticipants: true,
         videoQuality: true,
         passwordHash: true,
+        deletedAt: true,
         host: { select: { id: true, name: true } },
       },
     });
-    if (!room) throw new NotFoundException('Комната не найдена');
-    const { passwordHash, ...publicRoom } = room;
+    this.assertActiveRoom(room);
+    const { passwordHash, deletedAt: _d, ...publicRoom } = room;
     return {
       ...publicRoom,
       hasPassword: Boolean(passwordHash),
@@ -118,7 +150,7 @@ export class RoomsService {
       where: { slug },
       include: { host: { select: { id: true, name: true } } },
     });
-    if (!room) throw new NotFoundException('Комната не найдена');
+    this.assertActiveRoom(room);
 
     if (room.passwordHash) {
       if (!dto.password) throw new ForbiddenException('Нужен пароль комнаты');
@@ -165,7 +197,7 @@ export class RoomsService {
 
   async joinAsHost(hostId: string, slug: string) {
     const room = await this.prisma.room.findUnique({ where: { slug } });
-    if (!room) throw new NotFoundException('Комната не найдена');
+    this.assertActiveRoom(room);
     if (room.hostId !== hostId) throw new ForbiddenException('Нет доступа');
 
     const meeting = await this.prisma.meeting.create({
