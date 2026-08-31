@@ -6,6 +6,7 @@ import {
   Track,
   VideoPresets,
   VideoQuality,
+  type LocalTrack,
   type LocalVideoTrack,
   type RemoteTrack,
   type RemoteParticipant,
@@ -21,6 +22,7 @@ type VideoTile = {
   label: string;
   isLocal: boolean;
   videoTrack: LocalVideoTrack | RemoteTrack | null;
+  camOff?: boolean;
 };
 
 function MediaTile({
@@ -35,31 +37,37 @@ function MediaTile({
   onSelect?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const trackMuted = Boolean(tile.videoTrack?.isMuted);
+  const showPlaceholder = tile.camOff || trackMuted || !tile.videoTrack;
 
   useEffect(() => {
     const el = videoRef.current;
     const track = tile.videoTrack;
-    if (!el || !track || track.kind !== Track.Kind.Video) return;
+    if (!el || !track || track.kind !== Track.Kind.Video || showPlaceholder) return;
     track.attach(el);
     void el.play().catch(() => {});
     return () => {
       track.detach(el);
     };
-  }, [tile.videoTrack, tile.key]);
+  }, [tile.videoTrack, tile.key, showPlaceholder]);
 
   const className = `video-tile ${tile.isLocal ? 'local' : ''} ${active ? 'active' : ''} ${
     large ? 'large' : 'thumb'
-  }`;
+  } ${showPlaceholder ? 'cam-off' : ''}`;
 
   const media = (
     <>
-      <video
-        ref={videoRef}
-        autoPlay
-        muted={tile.isLocal}
-        playsInline
-        className="tile-video"
-      />
+      {showPlaceholder ? (
+        <div className="tile-placeholder">{tile.isLocal ? 'Камера выкл.' : 'Нет видео'}</div>
+      ) : (
+        <video
+          ref={videoRef}
+          autoPlay
+          muted={tile.isLocal}
+          playsInline
+          className="tile-video"
+        />
+      )}
       <div className="name-tag">{tile.label}</div>
     </>
   );
@@ -78,6 +86,35 @@ function MediaTile({
     >
       {media}
     </button>
+  );
+}
+
+function ScreenSurface({
+  track,
+  label,
+}: {
+  track: LocalVideoTrack | RemoteTrack | null;
+  label: string;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !track) return;
+    track.attach(el);
+    void el.play().catch(() => {});
+    return () => {
+      track.detach(el);
+    };
+  }, [track]);
+
+  if (!track) return null;
+
+  return (
+    <div className="screen-surface">
+      <video ref={videoRef} autoPlay playsInline className="screen-video" />
+      <div className="screen-label">{label}</div>
+    </div>
   );
 }
 
@@ -104,6 +141,12 @@ export function RoomPage() {
   const [localVideoTrack, setLocalVideoTrack] = useState<LocalVideoTrack | null>(null);
   const [focusKey, setFocusKey] = useState('local');
   const [viewMode, setViewMode] = useState<'video' | 'canvas'>('video');
+  const [micOn, setMicOn] = useState(true);
+  const [camOn, setCamOn] = useState(true);
+  const [screenOn, setScreenOn] = useState(false);
+  const [screenBusy, setScreenBusy] = useState(false);
+  const [screenTrack, setScreenTrack] = useState<LocalVideoTrack | RemoteTrack | null>(null);
+  const [screenLabel, setScreenLabel] = useState('Экран');
 
   const roomRef = useRef<Room | null>(null);
 
@@ -117,9 +160,10 @@ export function RoomPage() {
       label: 'Вы',
       isLocal: true,
       videoTrack: localVideoTrack,
+      camOff: !camOn,
     };
     return [local, ...remoteVideos];
-  }, [localVideoTrack, remoteVideos]);
+  }, [localVideoTrack, remoteVideos, camOn]);
 
   const focusTile = tiles.find((t) => t.key === focusKey) ?? tiles[0];
   const stripTiles = tiles.filter((t) => t.key !== focusTile?.key);
@@ -156,6 +200,15 @@ export function RoomPage() {
     }
   }, [tiles, focusKey, remoteVideos]);
 
+  const preferHighQuality = (publication?: RemoteTrackPublication) => {
+    if (!publication || publication.kind !== Track.Kind.Video) return;
+    try {
+      publication.setVideoQuality(VideoQuality.HIGH);
+    } catch {
+      // ignore
+    }
+  };
+
   const upsertRemoteVideo = (track: RemoteTrack, participant: RemoteParticipant) => {
     if (track.kind !== Track.Kind.Video) return;
     const key = `remote:${participant.identity}`;
@@ -177,25 +230,35 @@ export function RoomPage() {
     setRemoteVideos((prev) => prev.filter((t) => t.key !== key));
   };
 
-  const preferHighQuality = (publication?: RemoteTrackPublication) => {
-    if (!publication || publication.kind !== Track.Kind.Video) return;
-    try {
-      publication.setVideoQuality(VideoQuality.HIGH);
-    } catch {
-      // older browsers / no simulcast — ignore
-    }
+  const clearScreenIfMatch = (track: LocalTrack | RemoteTrack) => {
+    setScreenTrack((cur) => {
+      if (cur && cur.sid === track.sid) {
+        setScreenOn(false);
+        return null;
+      }
+      return cur;
+    });
   };
 
   const attachExistingRemotes = (room: Room) => {
     for (const participant of room.remoteParticipants.values()) {
       for (const publication of participant.trackPublications.values()) {
         const track = publication.track;
-        if (track?.kind === Track.Kind.Video) {
+        if (!track) continue;
+        if (track.kind === Track.Kind.Audio) {
+          track.attach();
+          continue;
+        }
+        if (track.kind !== Track.Kind.Video) continue;
+        if (publication.source === Track.Source.ScreenShare) {
+          preferHighQuality(publication as RemoteTrackPublication);
+          setScreenTrack(track as RemoteTrack);
+          setScreenLabel(`${participant.name || participant.identity} · экран`);
+          setScreenOn(true);
+          setViewMode('canvas');
+        } else {
           preferHighQuality(publication as RemoteTrackPublication);
           upsertRemoteVideo(track as RemoteTrack, participant);
-        }
-        if (track?.kind === Track.Kind.Audio) {
-          track.attach();
         }
       }
     }
@@ -210,8 +273,11 @@ export function RoomPage() {
 
     setRemoteVideos([]);
     setFocusKey('local');
+    setMicOn(true);
+    setCamOn(true);
+    setScreenOn(false);
+    setScreenTrack(null);
 
-    // adaptiveStream off: for 1:1 it often sticks on a low layer (noise + freezes on big screen)
     const room = new Room({
       adaptiveStream: false,
       dynacast: true,
@@ -233,13 +299,40 @@ export function RoomPage() {
         track.attach();
         return;
       }
-      if (track.kind === Track.Kind.Video) {
+      if (track.kind !== Track.Kind.Video) return;
+      if (publication.source === Track.Source.ScreenShare) {
         preferHighQuality(publication);
-        upsertRemoteVideo(track, participant);
+        setScreenTrack(track);
+        setScreenLabel(`${participant.name || participant.identity} · экран`);
+        setScreenOn(true);
+        setViewMode('canvas');
+        return;
       }
+      preferHighQuality(publication);
+      upsertRemoteVideo(track, participant);
     });
-    room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
+    room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+      if (publication.source === Track.Source.ScreenShare) {
+        clearScreenIfMatch(track);
+        return;
+      }
       if (track.kind === Track.Kind.Video) removeRemoteVideo(participant);
+    });
+    room.on(RoomEvent.LocalTrackPublished, (publication) => {
+      if (publication.source !== Track.Source.ScreenShare || !publication.track) return;
+      const track = publication.track as LocalVideoTrack;
+      setScreenTrack(track);
+      setScreenLabel('Ваш экран');
+      setScreenOn(true);
+      setViewMode('canvas');
+    });
+    room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
+      if (publication.source === Track.Source.ScreenShare && publication.track) {
+        clearScreenIfMatch(publication.track);
+      }
+      if (publication.source === Track.Source.Camera) {
+        setLocalVideoTrack(null);
+      }
     });
     room.on(RoomEvent.ParticipantDisconnected, (participant) => {
       removeRemoteVideo(participant);
@@ -273,7 +366,6 @@ export function RoomPage() {
     });
     await room.localParticipant.publishTrack(audioTrack);
 
-    // Guest joins after host: tracks already in room must be attached now
     attachExistingRemotes(room);
   };
 
@@ -283,6 +375,10 @@ export function RoomPage() {
     setRemoteVideos([]);
     setFocusKey('local');
     setViewMode('video');
+    setMicOn(true);
+    setCamOn(true);
+    setScreenOn(false);
+    setScreenTrack(null);
     void roomRef.current?.disconnect();
     roomRef.current = null;
     setJoined(false);
@@ -292,6 +388,60 @@ export function RoomPage() {
     setRole(null);
     setLinkCopied(false);
     setStatus('Не в комнате');
+  };
+
+  const toggleMic = async () => {
+    const room = roomRef.current;
+    if (!room) return;
+    const next = !micOn;
+    try {
+      await room.localParticipant.setMicrophoneEnabled(next);
+      setMicOn(next);
+    } catch (err) {
+      setRecordingNote(err instanceof Error ? err.message : 'Не удалось переключить микрофон');
+    }
+  };
+
+  const toggleCam = async () => {
+    const room = roomRef.current;
+    if (!room) return;
+    const next = !camOn;
+    try {
+      await room.localParticipant.setCameraEnabled(next);
+      setCamOn(next);
+      if (next) {
+        const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+        if (pub?.track) setLocalVideoTrack(pub.track as LocalVideoTrack);
+      }
+    } catch (err) {
+      setRecordingNote(err instanceof Error ? err.message : 'Не удалось переключить камеру');
+    }
+  };
+
+  const toggleScreen = async () => {
+    const room = roomRef.current;
+    if (!room || screenBusy) return;
+    setScreenBusy(true);
+    setRecordingNote('');
+    try {
+      const localPub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+      if (localPub) {
+        await room.localParticipant.setScreenShareEnabled(false);
+        setScreenOn(false);
+        setScreenTrack(null);
+      } else {
+        await room.localParticipant.setScreenShareEnabled(true, { audio: false });
+        setViewMode('canvas');
+      }
+    } catch (err) {
+      setRecordingNote(
+        err instanceof Error
+          ? err.message
+          : 'Не удалось показать экран (нужен HTTPS и разрешение браузера)',
+      );
+    } finally {
+      setScreenBusy(false);
+    }
   };
 
   const onJoinGuest = async (e: FormEvent) => {
@@ -398,6 +548,10 @@ export function RoomPage() {
     );
   }
 
+  const sharingLocally = Boolean(
+    roomRef.current?.localParticipant.getTrackPublication(Track.Source.ScreenShare),
+  );
+
   return (
     <div className="room-shell">
       <header className="topbar">
@@ -456,14 +610,18 @@ export function RoomPage() {
 
         <div className={`canvas-workspace ${viewMode === 'canvas' ? 'is-visible' : 'is-hidden'}`}>
           <div className="canvas-surface">
-            <div className="canvas-empty">
-              <div className="canvas-empty-mark" aria-hidden />
-              <h2>Холст</h2>
-              <p>
-                Здесь появится совместная работа: экран, карты, расстановки, рисование.
-                Видео остаётся в PiP справа.
-              </p>
-            </div>
+            {screenTrack ? (
+              <ScreenSurface track={screenTrack} label={screenLabel} />
+            ) : (
+              <div className="canvas-empty">
+                <div className="canvas-empty-mark" aria-hidden />
+                <h2>Холст</h2>
+                <p>
+                  Нажмите «Экран», чтобы показать рабочий стол. Дальше здесь будут карты,
+                  расстановки и рисование.
+                </p>
+              </div>
+            )}
           </div>
           <div className="pip-stack" aria-label="Видео участников">
             {tiles.map((tile) => (
@@ -481,27 +639,59 @@ export function RoomPage() {
         </div>
       </div>
 
-      <nav className="room-dock" aria-label="Режим комнаты">
-        <button
-          type="button"
-          className={viewMode === 'video' ? 'active' : ''}
-          onClick={() => setViewMode('video')}
-        >
-          Видео
-        </button>
-        <button
-          type="button"
-          className={viewMode === 'canvas' ? 'active' : ''}
-          onClick={() => setViewMode('canvas')}
-        >
-          Холст
-        </button>
-      </nav>
+      <div className="room-controls">
+        <div className="media-controls" aria-label="Медиа">
+          <button
+            type="button"
+            className={`media-btn ${micOn ? '' : 'off'}`}
+            onClick={() => void toggleMic()}
+            title={micOn ? 'Выключить микрофон' : 'Включить микрофон'}
+          >
+            {micOn ? 'Микрофон' : 'Микрофон выкл.'}
+          </button>
+          <button
+            type="button"
+            className={`media-btn ${camOn ? '' : 'off'}`}
+            onClick={() => void toggleCam()}
+            title={camOn ? 'Выключить камеру' : 'Включить камеру'}
+          >
+            {camOn ? 'Камера' : 'Камера выкл.'}
+          </button>
+          <button
+            type="button"
+            className={`media-btn ${sharingLocally ? 'active' : ''}`}
+            disabled={screenBusy}
+            onClick={() => void toggleScreen()}
+            title={sharingLocally ? 'Остановить показ экрана' : 'Показать экран'}
+          >
+            {screenBusy ? '…' : sharingLocally ? 'Стоп экран' : 'Экран'}
+          </button>
+        </div>
+
+        <nav className="room-dock" aria-label="Режим комнаты">
+          <button
+            type="button"
+            className={viewMode === 'video' ? 'active' : ''}
+            onClick={() => setViewMode('video')}
+          >
+            Видео
+          </button>
+          <button
+            type="button"
+            className={viewMode === 'canvas' ? 'active' : ''}
+            onClick={() => setViewMode('canvas')}
+          >
+            Холст
+          </button>
+        </nav>
+      </div>
 
       <p className="room-hint muted">
         {recordingNote ||
           (viewMode === 'canvas'
-            ? 'Режим холста. Нажмите на PiP, чтобы вернуться к видео.'
+            ? screenTrack
+              ? 'Демонстрация экрана на холсте. PiP справа — участники.'
+              : 'Режим холста. Нажмите «Экран» или PiP, чтобы вернуться к видео.'
             : tiles.length > 1
               ? 'Нажмите на миниатюру, чтобы переключить главное видео.'
               : canRecord
