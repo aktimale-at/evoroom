@@ -17,7 +17,7 @@ type DrawMsg =
   | { t: 'draw'; op: 'sync'; strokes: Stroke[] }
   | { t: 'draw'; op: 'req' };
 
-const COLORS = ['#1a1a22', '#b91c1c', '#1d4ed8', '#15803d', '#c2410c'] as const;
+const COLORS = ['#1a1a22', '#b91c1c', '#1d4ed8', '#15803d', '#eab308', '#c2410c'] as const;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -284,7 +284,7 @@ export function DrawingBoard({ room }: { room: Room | null }) {
     <div className="drawing-board" ref={wrapRef}>
       <canvas
         ref={canvasRef}
-        className="drawing-canvas"
+        className={`drawing-canvas tool-${tool}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -293,17 +293,42 @@ export function DrawingBoard({ room }: { room: Room | null }) {
       <div className="drawing-toolbar" onPointerDown={(e) => e.stopPropagation()}>
         <button
           type="button"
-          className={tool === 'pen' ? 'active' : ''}
+          className={`tool-icon-btn ${tool === 'pen' ? 'active' : ''}`}
           onClick={() => setTool('pen')}
+          title="Карандаш"
+          aria-label="Карандаш"
         >
-          Карандаш
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+              d="M15.5 4.5l4 4L8 20H4v-4L15.5 4.5z"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+            <path d="M13.5 6.5l4 4" stroke="currentColor" strokeWidth="1.8" />
+          </svg>
         </button>
         <button
           type="button"
-          className={tool === 'eraser' ? 'active' : ''}
+          className={`tool-icon-btn ${tool === 'eraser' ? 'active' : ''}`}
           onClick={() => setTool('eraser')}
+          title="Ластик"
+          aria-label="Ластик"
         >
-          Ластик
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+              d="M4 16l6.5-6.5 7 7L13 21H6.5L4 18.5V16z"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M12 8.5l3.5-3.5 4 4L16 12.5"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
         <span className="drawing-sep" />
         {COLORS.map((c) => (
