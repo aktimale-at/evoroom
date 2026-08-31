@@ -16,6 +16,7 @@ import {
 } from 'livekit-client';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
+import { DrawingBoard } from '../components/DrawingBoard';
 
 type VideoTile = {
   key: string;
@@ -146,6 +147,7 @@ export function RoomPage() {
   const [screenBusy, setScreenBusy] = useState(false);
   const [screenTrack, setScreenTrack] = useState<LocalVideoTrack | RemoteTrack | null>(null);
   const [screenLabel, setScreenLabel] = useState('Экран');
+  const [lkRoom, setLkRoom] = useState<Room | null>(null);
 
   const roomRef = useRef<Room | null>(null);
 
@@ -273,6 +275,7 @@ export function RoomPage() {
     setMicOn(true);
     setCamOn(true);
     setScreenTrack(null);
+    setLkRoom(null);
 
     const room = new Room({
       adaptiveStream: false,
@@ -289,6 +292,7 @@ export function RoomPage() {
       },
     });
     roomRef.current = room;
+    setLkRoom(room);
 
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
       if (track.kind === Track.Kind.Audio) {
@@ -374,6 +378,7 @@ export function RoomPage() {
     setScreenTrack(null);
     void roomRef.current?.disconnect();
     roomRef.current = null;
+    setLkRoom(null);
     setJoined(false);
     setRecording(false);
     setRecordingNote('');
@@ -609,11 +614,11 @@ export function RoomPage() {
                 <div className="canvas-empty-mark" aria-hidden />
                 <h2>Холст</h2>
                 <p>
-                  Нажмите «Экран», чтобы показать рабочий стол. Дальше здесь будут карты,
-                  расстановки и рисование.
+                  Рисуйте поверх поля или включите «Экран». Штрихи синхронизируются с участниками.
                 </p>
               </div>
             )}
+            <DrawingBoard room={lkRoom} />
           </div>
           <div className="pip-stack" aria-label="Видео участников">
             {tiles.map((tile) => (
@@ -682,8 +687,8 @@ export function RoomPage() {
         {recordingNote ||
           (viewMode === 'canvas'
             ? screenTrack
-              ? 'Демонстрация экрана на холсте. PiP справа — участники.'
-              : 'Режим холста. Нажмите «Экран» или PiP, чтобы вернуться к видео.'
+              ? 'Экран на холсте. Можно рисовать поверх. PiP справа — участники.'
+              : 'Рисуйте на холсте — штрихи видны всем. Или нажмите «Экран».'
             : tiles.length > 1
               ? 'Нажмите на миниатюру, чтобы переключить главное видео.'
               : canRecord
