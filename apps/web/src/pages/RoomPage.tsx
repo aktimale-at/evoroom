@@ -103,6 +103,7 @@ export function RoomPage() {
   const [remoteVideos, setRemoteVideos] = useState<VideoTile[]>([]);
   const [localVideoTrack, setLocalVideoTrack] = useState<LocalVideoTrack | null>(null);
   const [focusKey, setFocusKey] = useState('local');
+  const [viewMode, setViewMode] = useState<'video' | 'canvas'>('video');
 
   const roomRef = useRef<Room | null>(null);
 
@@ -281,6 +282,7 @@ export function RoomPage() {
     setLocalVideoTrack(null);
     setRemoteVideos([]);
     setFocusKey('local');
+    setViewMode('video');
     void roomRef.current?.disconnect();
     roomRef.current = null;
     setJoined(false);
@@ -435,29 +437,76 @@ export function RoomPage() {
         </div>
       </header>
 
-      <div className="room-stage">
-        {focusTile && <MediaTile tile={focusTile} active large />}
-        {stripTiles.length > 0 && (
-          <div className="video-strip" role="list">
-            {stripTiles.map((tile) => (
+      <div className="room-main">
+        <div className={`room-stage ${viewMode === 'video' ? 'is-visible' : 'is-hidden'}`}>
+          {focusTile && <MediaTile tile={focusTile} active large />}
+          {stripTiles.length > 0 && (
+            <div className="video-strip" role="list">
+              {stripTiles.map((tile) => (
+                <MediaTile
+                  key={tile.key}
+                  tile={tile}
+                  active={false}
+                  onSelect={() => setFocusKey(tile.key)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className={`canvas-workspace ${viewMode === 'canvas' ? 'is-visible' : 'is-hidden'}`}>
+          <div className="canvas-surface">
+            <div className="canvas-empty">
+              <div className="canvas-empty-mark" aria-hidden />
+              <h2>Холст</h2>
+              <p>
+                Здесь появится совместная работа: экран, карты, расстановки, рисование.
+                Видео остаётся в PiP справа.
+              </p>
+            </div>
+          </div>
+          <div className="pip-stack" aria-label="Видео участников">
+            {tiles.map((tile) => (
               <MediaTile
-                key={tile.key}
+                key={`pip-${tile.key}`}
                 tile={tile}
-                active={false}
-                onSelect={() => setFocusKey(tile.key)}
+                active={tile.key === focusKey}
+                onSelect={() => {
+                  setFocusKey(tile.key);
+                  setViewMode('video');
+                }}
               />
             ))}
           </div>
-        )}
+        </div>
       </div>
+
+      <nav className="room-dock" aria-label="Режим комнаты">
+        <button
+          type="button"
+          className={viewMode === 'video' ? 'active' : ''}
+          onClick={() => setViewMode('video')}
+        >
+          Видео
+        </button>
+        <button
+          type="button"
+          className={viewMode === 'canvas' ? 'active' : ''}
+          onClick={() => setViewMode('canvas')}
+        >
+          Холст
+        </button>
+      </nav>
 
       <p className="room-hint muted">
         {recordingNote ||
-          (tiles.length > 1
-            ? 'Нажмите на миниатюру, чтобы переключить главное видео.'
-            : canRecord
-              ? 'Запись: LiveKit Egress → MinIO'
-              : 'Ожидание второго участника…')}
+          (viewMode === 'canvas'
+            ? 'Режим холста. Нажмите на PiP, чтобы вернуться к видео.'
+            : tiles.length > 1
+              ? 'Нажмите на миниатюру, чтобы переключить главное видео.'
+              : canRecord
+                ? 'Запись: LiveKit Egress → MinIO'
+                : 'Ожидание второго участника…')}
       </p>
     </div>
   );

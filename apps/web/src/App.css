@@ -514,6 +514,33 @@
   min-height: 0;
 }
 
+.room-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.room-stage,
+.canvas-workspace {
+  flex: 1;
+  min-height: 0;
+}
+
+.room-stage.is-hidden,
+.canvas-workspace.is-hidden {
+  display: none !important;
+}
+
+.room-stage.is-visible {
+  display: grid;
+}
+
+.canvas-workspace.is-visible {
+  display: flex;
+}
+
 .room-stage {
   display: grid;
   grid-template-columns: 1fr 200px;
@@ -522,6 +549,95 @@
   flex: 1;
   min-height: 0;
   align-items: stretch;
+}
+
+.canvas-workspace {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  display: flex;
+}
+
+.canvas-surface {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: #f7f7f4;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.canvas-empty {
+  max-width: 420px;
+  padding: 24px;
+  text-align: center;
+  color: #3a3a42;
+}
+
+.canvas-empty h2 {
+  margin: 12px 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #1a1a22;
+}
+
+.canvas-empty p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #5c5c68;
+}
+
+.canvas-empty-mark {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(74, 108, 247, 0.18), rgba(74, 108, 247, 0.05)),
+    #fff;
+  border: 1px solid rgba(74, 108, 247, 0.25);
+}
+
+.pip-stack {
+  position: absolute;
+  right: 28px;
+  bottom: 28px;
+  width: min(200px, 36vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 5;
+}
+
+.pip-stack .video-tile {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.room-dock {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px 4px;
+}
+
+.room-dock button {
+  min-width: 110px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #c8c8d8;
+}
+
+.room-dock button.active {
+  background: rgba(74, 108, 247, 0.22);
+  border-color: rgba(74, 108, 247, 0.55);
+  color: #fff;
 }
 
 .room-stage > .video-tile.large {
@@ -619,6 +735,12 @@ button.video-tile.thumb:focus-visible {
 
   .video-strip .video-tile.thumb {
     flex: 0 0 140px;
+  }
+
+  .pip-stack {
+    right: 16px;
+    bottom: 16px;
+    width: min(140px, 42vw);
   }
 
   .room-list li {
