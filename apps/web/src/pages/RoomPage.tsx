@@ -143,7 +143,6 @@ export function RoomPage() {
   const [viewMode, setViewMode] = useState<'video' | 'canvas'>('video');
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
-  const [screenOn, setScreenOn] = useState(false);
   const [screenBusy, setScreenBusy] = useState(false);
   const [screenTrack, setScreenTrack] = useState<LocalVideoTrack | RemoteTrack | null>(null);
   const [screenLabel, setScreenLabel] = useState('Экран');
@@ -233,7 +232,6 @@ export function RoomPage() {
   const clearScreenIfMatch = (track: LocalTrack | RemoteTrack) => {
     setScreenTrack((cur) => {
       if (cur && cur.sid === track.sid) {
-        setScreenOn(false);
         return null;
       }
       return cur;
@@ -254,7 +252,6 @@ export function RoomPage() {
           preferHighQuality(publication as RemoteTrackPublication);
           setScreenTrack(track as RemoteTrack);
           setScreenLabel(`${participant.name || participant.identity} · экран`);
-          setScreenOn(true);
           setViewMode('canvas');
         } else {
           preferHighQuality(publication as RemoteTrackPublication);
@@ -275,7 +272,6 @@ export function RoomPage() {
     setFocusKey('local');
     setMicOn(true);
     setCamOn(true);
-    setScreenOn(false);
     setScreenTrack(null);
 
     const room = new Room({
@@ -304,7 +300,6 @@ export function RoomPage() {
         preferHighQuality(publication);
         setScreenTrack(track);
         setScreenLabel(`${participant.name || participant.identity} · экран`);
-        setScreenOn(true);
         setViewMode('canvas');
         return;
       }
@@ -323,7 +318,6 @@ export function RoomPage() {
       const track = publication.track as LocalVideoTrack;
       setScreenTrack(track);
       setScreenLabel('Ваш экран');
-      setScreenOn(true);
       setViewMode('canvas');
     });
     room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
@@ -377,7 +371,6 @@ export function RoomPage() {
     setViewMode('video');
     setMicOn(true);
     setCamOn(true);
-    setScreenOn(false);
     setScreenTrack(null);
     void roomRef.current?.disconnect();
     roomRef.current = null;
@@ -427,7 +420,6 @@ export function RoomPage() {
       const localPub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
       if (localPub) {
         await room.localParticipant.setScreenShareEnabled(false);
-        setScreenOn(false);
         setScreenTrack(null);
       } else {
         await room.localParticipant.setScreenShareEnabled(true, { audio: false });
